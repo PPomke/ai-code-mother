@@ -1,11 +1,11 @@
 spring:
   application:
-    name: yu-ai-code-mother-backend
+    name: ai-code-mother-backend
   profiles:
     active: local
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/yu-ai-code-mother
+    url: jdbc:mysql://localhost:3306/ai-code-mother
     username: root
     password: 123456
 server:
@@ -18,7 +18,7 @@ springdoc:
   group-configs:
     - group: 'default'
       paths-to-match: '/**'
-      packages-to-scan: com.yupi.yuaicodemother.controller
+      packages-to-scan: com.griffin.aicodemother.controller
 # knife4j
 knife4j:
   enable: true
