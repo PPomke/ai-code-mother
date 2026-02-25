@@ -1,7 +1,6 @@
 package com.griffin.aicodemother.core.saver;
 
 import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.griffin.aicodemother.exception.BusinessException;
 import com.griffin.aicodemother.exception.ErrorCode;
@@ -21,11 +20,11 @@ public abstract class CodeFileSaverTemplate<T> {
 
     private static final String FILE_SAVE_ROOT_DIR = System.getProperty("user.dir") + "/tmp/code_output";
 
-    public final File saveCode(T result) {
+    public final File saveCode(T result,Long appId) {
         // 校验输入
         validateInput(result);
         // 构建唯一目录
-        String baseDirPath = buildUniqueDir();
+        String baseDirPath = buildUniqueDir(appId);
         // 保存文件
         saveFiles(result, baseDirPath);
         // 返回目录结构对象
@@ -45,12 +44,15 @@ public abstract class CodeFileSaverTemplate<T> {
     /**
      * 构建唯一目录路径：tmp/code_output/bizType_雪花ID
      */
-    protected final String buildUniqueDir(){
+    protected final String buildUniqueDir(Long appId){
+        if (appId == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
+        }
         String codeType = getCodeType().getValue();
-        String uniqueDirName = StrUtil.format("{}_{}", codeType, IdUtil.getSnowflakeNextIdStr());
-        String dirpath = FILE_SAVE_ROOT_DIR + File.separator + uniqueDirName;
-        FileUtil.mkdir(dirpath);
-        return dirpath;
+        String uniqueDirName = StrUtil.format("{}_{}", codeType, appId);
+        String dirPath = FILE_SAVE_ROOT_DIR + File.separator + uniqueDirName;
+        FileUtil.mkdir(dirPath);
+        return dirPath;
     }
 
     /**
