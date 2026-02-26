@@ -2,6 +2,7 @@ package com.griffin.aicodemother.core.saver;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
+import com.griffin.aicodemother.constant.AppConstant;
 import com.griffin.aicodemother.exception.BusinessException;
 import com.griffin.aicodemother.exception.ErrorCode;
 import com.griffin.aicodemother.model.enums.CodeGenTypeEnum;
@@ -18,7 +19,9 @@ import java.nio.charset.StandardCharsets;
  */
 public abstract class CodeFileSaverTemplate<T> {
 
-    private static final String FILE_SAVE_ROOT_DIR = System.getProperty("user.dir") + "/tmp/code_output";
+    // 文件保存根目录
+    protected static final String FILE_SAVE_ROOT_DIR = AppConstant.CODE_OUTPUT_ROOT_DIR;
+
 
     public final File saveCode(T result,Long appId) {
         // 校验输入
