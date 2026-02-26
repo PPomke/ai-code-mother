@@ -8,10 +8,23 @@ spring:
     url: jdbc:mysql://localhost:3306/ai_code_mother
     username: root
     password: 123456
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: qwe123!@#
+      ttl: 3600
+      username: default
+  session:
+    store-type: redis
+    timeout: 2592000
 server:
   port: 8123
   servlet:
     context-path: /api
+    session:
+      cookie:
+        max-age: 2592000
 
 # springdoc-openapi
 springdoc:
