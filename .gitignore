@@ -26,3 +26,6 @@ replay_pid*
 ### CUSTOM ###
 application-local.yml
 
+tmp
+target
+

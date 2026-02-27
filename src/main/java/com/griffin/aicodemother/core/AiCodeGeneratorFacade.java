@@ -1,15 +1,20 @@
 package com.griffin.aicodemother.core;
 
+import cn.hutool.json.JSONUtil;
 import com.griffin.aicodemother.ai.AiCodeGeneratorService;
 import com.griffin.aicodemother.ai.AiCodeGeneratorServiceFactory;
 import com.griffin.aicodemother.ai.model.HtmlCodeResult;
 import com.griffin.aicodemother.ai.model.MultiFileCodeResult;
+import com.griffin.aicodemother.ai.model.message.AiResponseMessage;
+import com.griffin.aicodemother.ai.model.message.ToolExecutedMessage;
+import com.griffin.aicodemother.ai.model.message.ToolRequestMessage;
 import com.griffin.aicodemother.core.parser.CodeParserExecutor;
 import com.griffin.aicodemother.core.saver.CodeFileSaverExecutor;
 import com.griffin.aicodemother.exception.BusinessException;
 import com.griffin.aicodemother.exception.ErrorCode;
 import com.griffin.aicodemother.model.enums.CodeGenTypeEnum;
 import cn.hutool.core.util.StrUtil;
+import dev.langchain4j.service.TokenStream;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,7 +49,7 @@ public class AiCodeGeneratorFacade {
         if (codeGenTypeEnum == null){
             throw new BusinessException(ErrorCode.SYSTEM_ERROR,"生成类型为空");
         }
-        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId, codeGenTypeEnum);
         return switch (codeGenTypeEnum) {
             case HTML -> {
                 HtmlCodeResult htmlCodeResult = aiCodeGeneratorService.generateHtmlCode(userMessage);
@@ -68,7 +73,7 @@ public class AiCodeGeneratorFacade {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
         }
-        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId,codeGenTypeEnum);
         return switch (codeGenTypeEnum) {
             case HTML -> {
                 Flux<String> result = aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
@@ -76,6 +81,10 @@ public class AiCodeGeneratorFacade {
             }
             case MULTI_FILE -> {
                 Flux<String> result = aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
+                yield processCodeStream(result, CodeGenTypeEnum.MULTI_FILE, appId);
+            }
+            case VUE_PROJECT -> {
+                Flux<String> result = aiCodeGeneratorService.generateVueProjectCodeStream(appId, userMessage);
                 yield processCodeStream(result, CodeGenTypeEnum.MULTI_FILE, appId);
             }
             default -> {
@@ -119,6 +128,31 @@ public class AiCodeGeneratorFacade {
             } catch (Exception e) {
                 log.error("保存失败: {}", e.getMessage());
             }
+        });
+    }
+
+    /**
+     * 将TokenStream转换为Flux<String>，并传递工具调用信息
+     * @param tokenStream TokenStream
+     * @return Flux<String> 流式响应
+     */
+    private Flux<String> processTokenStream(TokenStream tokenStream){
+        return Flux.create(sink -> {
+            tokenStream.onPartialResponse(partialResponse -> {
+                AiResponseMessage aiResponseMessage = new AiResponseMessage(partialResponse);
+                sink.next(JSONUtil.toJsonStr(aiResponseMessage));
+            }).onPartialToolExecutionRequest((index,toolExecutionRequest)-> {
+                ToolRequestMessage toolRequestMessage = new ToolRequestMessage(toolExecutionRequest);
+                sink.next(JSONUtil.toJsonStr(toolRequestMessage));
+            }).onToolExecuted(toolExecution -> {
+                ToolExecutedMessage toolResponseMessage = new ToolExecutedMessage(toolExecution);
+                sink.next(JSONUtil.toJsonStr(toolResponseMessage));
+            }).onCompleteResponse(chatResponse -> {
+                sink.complete();
+            }).onError(throwable -> {
+                throwable.printStackTrace();
+                sink.error(throwable);
+            }).start();
         });
     }
 
