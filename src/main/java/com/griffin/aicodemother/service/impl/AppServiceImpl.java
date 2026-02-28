@@ -5,6 +5,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
+import com.griffin.aicodemother.ai.AiCodeGenTypeRoutingService;
 import com.griffin.aicodemother.constant.AppConstant;
 import com.griffin.aicodemother.core.AiCodeGeneratorFacade;
 import com.griffin.aicodemother.core.builder.VueProjectBuilder;
@@ -13,6 +14,7 @@ import com.griffin.aicodemother.exception.BusinessException;
 import com.griffin.aicodemother.exception.ErrorCode;
 import com.griffin.aicodemother.exception.ThrowUtils;
 import com.griffin.aicodemother.mapper.AppMapper;
+import com.griffin.aicodemother.model.dto.app.AppAddRequest;
 import com.griffin.aicodemother.model.dto.app.AppQueryRequest;
 import com.griffin.aicodemother.model.entity.App;
 import com.griffin.aicodemother.model.entity.User;
@@ -21,6 +23,7 @@ import com.griffin.aicodemother.model.enums.CodeGenTypeEnum;
 import com.griffin.aicodemother.model.vo.AppVO;
 import com.griffin.aicodemother.model.vo.UserVO;
 import com.griffin.aicodemother.service.ChatHistoryService;
+import com.griffin.aicodemother.service.ScreenshotService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.griffin.aicodemother.service.AppService;
@@ -57,6 +60,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
     private StreamHandlerExecutor streamHandlerExecutor;
     @Resource
     private VueProjectBuilder vueProjectBuilder;
+    @Resource
+    private ScreenshotService screenshotService;
+    @Resource
+    private AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService;
 
     // 应用生成根目录（用于浏览）
     private static final String PREVIEW_ROOT_DIR = AppConstant.CODE_OUTPUT_ROOT_DIR;
@@ -205,22 +212,54 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
             sourceDir = distDir;
             log.info("Vue 项目构建成功，dist 目录: {}", distDir.getAbsolutePath());
         }
-        // 复制文件到部署目录
+        // 8. 复制文件到部署目录
         String deployDirPath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
         try {
             FileUtil.copyContent(sourceDir, new File(deployDirPath), true);
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "部署失败：" + e.getMessage());
         }
-        // 8. 更新应用的 deployKey 和部署时间
+        // 9. 更新应用的 deployKey 和部署时间
         App updateApp = new App();
         updateApp.setId(appId);
         updateApp.setDeployKey(deployKey);
         updateApp.setDeployedTime(LocalDateTime.now());
         boolean updateResult = this.updateById(updateApp);
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
-        // 9. 返回可访问的 URL
-        return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        // 10. 返回可访问的 URL
+        String appDeployUrl = String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        // 11. 异步生成截图并更新应用封面
+        generateAppScreenshotAsync(appId, appDeployUrl);
+        return appDeployUrl;
+    }
+
+    /**
+     * 创建应用
+     * @param appAddRequest 创建App应用请求
+     * @param loginUser 用户信息
+     * @return 应用ID
+     */
+    @Override
+    public Long createApp(AppAddRequest appAddRequest, User loginUser) {
+        // 参数校验
+        String initPrompt = appAddRequest.getInitPrompt();
+        ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "初始化 prompt 不能为空");
+        // 构造入库对象
+        App app = new App();
+        BeanUtil.copyProperties(appAddRequest, app);
+        app.setUserId(loginUser.getId());
+        // 应用名称暂时为 initPrompt 前 12 位
+        app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
+        // 使用AI智能选择代码生成类型
+        CodeGenTypeEnum codeGenTypeEnum = aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt);
+        // 暂时设置为多文件生成
+//        app.setCodeGenType(CodeGenTypeEnum.MULTI_FILE.getValue());
+        app.setCodeGenType(codeGenTypeEnum.getValue());
+        // 插入数据库
+        boolean result = this.save(app);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        log.info("创建应用成功，应用ID: {}, 类型: {}", app.getId(), codeGenTypeEnum.getValue());
+        return app.getId();
     }
 
     /**
@@ -250,6 +289,24 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         return super.removeById(id);
     }
 
+    /**
+     * 异步生成应用截图并更新应用封面
+     * @param appId 应用ID
+     * @param appUrl 应用URL
+     */
+    public void generateAppScreenshotAsync(Long appId, String appUrl) {
+        // 使用虚拟线程异步执行
+        Thread.startVirtualThread(() -> {
+            // 调用截图服务生成截图并上传
+            String screenshotUrl = screenshotService.generateAndUploadScreenshot(appUrl);
+            // 更新应用封面字段
+            App updateApp = new App();
+            updateApp.setId(appId);
+            updateApp.setCover(screenshotUrl);
+            boolean updateResult = this.updateById(updateApp);
+            ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用封面失败");
+        });
+    }
 
 
 

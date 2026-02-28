@@ -1,5 +1,6 @@
 package com.griffin.aicodemother.service;
 
+import com.griffin.aicodemother.model.dto.app.AppAddRequest;
 import com.griffin.aicodemother.model.dto.app.AppQueryRequest;
 import com.griffin.aicodemother.model.entity.App;
 import com.griffin.aicodemother.model.entity.User;
@@ -27,4 +28,5 @@ public interface AppService extends IService<App> {
 
     String deployApp(Long appId,User loginUser);
 
+    Long createApp(AppAddRequest appAddRequest, User loginUser);
 }
