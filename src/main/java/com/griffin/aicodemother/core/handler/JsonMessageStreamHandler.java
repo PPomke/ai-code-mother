@@ -73,7 +73,13 @@ public class JsonMessageStreamHandler {
      * 解析并收集 TokenStream 数据
      */
     private String handleJsonMessageChunk(String chunk, StringBuilder chatHistoryStringBuilder, Set<String> seenToolIds) {
-        // 解析 JSON
+        if (StrUtil.isBlank(chunk)) {
+            return "";
+        }
+        if (!JSONUtil.isTypeJSONObject(chunk)) {
+            chatHistoryStringBuilder.append(chunk);
+            return chunk;
+        }
         StreamMessage streamMessage = JSONUtil.toBean(chunk, StreamMessage.class);
         StreamMessageTypeEnum typeEnum = StreamMessageTypeEnum.getEnumByValue(streamMessage.getType());
         switch (typeEnum) {
@@ -99,7 +105,12 @@ public class JsonMessageStreamHandler {
             }
             case TOOL_EXECUTED -> {
                 ToolExecutedMessage toolExecutedMessage = JSONUtil.toBean(chunk, ToolExecutedMessage.class);
-                JSONObject jsonObject = JSONUtil.parseObj(toolExecutedMessage.getArguments());
+                String arguments = toolExecutedMessage.getArguments();
+                if (!JSONUtil.isTypeJSONObject(arguments)) {
+                    chatHistoryStringBuilder.append(chunk);
+                    return chunk;
+                }
+                JSONObject jsonObject = JSONUtil.parseObj(arguments);
                 String relativeFilePath = jsonObject.getStr("relativeFilePath");
                 String suffix = FileUtil.getSuffix(relativeFilePath);
                 String content = jsonObject.getStr("content");
