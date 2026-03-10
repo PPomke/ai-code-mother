@@ -2,7 +2,7 @@ package com.griffin.aicodemother.ai;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.griffin.aicodemother.ai.tools.FileWriteTool;
+import com.griffin.aicodemother.ai.tools.*;
 import com.griffin.aicodemother.exception.BusinessException;
 import com.griffin.aicodemother.exception.ErrorCode;
 import com.griffin.aicodemother.model.enums.CodeGenTypeEnum;
@@ -40,6 +40,8 @@ public class AiCodeGeneratorServiceFactory {
     private RedisChatMemoryStore redisChatMemoryStore;
     @Resource
     private ChatHistoryService chatHistoryService;
+    @Resource
+    private ToolManager toolManager;
 
     /**
      * AI 服务实例缓存
@@ -98,7 +100,7 @@ public class AiCodeGeneratorServiceFactory {
             case VUE_PROJECT -> AiServices.builder(AiCodeGeneratorService.class)
                     .streamingChatModel(reasoningStreamingChatModel)
                     .chatMemoryProvider(memoryId -> chatMemory)
-                    .tools(new FileWriteTool())
+                    .tools((Object) toolManager.getAllTools())
                     .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(
                             toolExecutionRequest, "Error: there is no tool called " + toolExecutionRequest.name()
                     ))
